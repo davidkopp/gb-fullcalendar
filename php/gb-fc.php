@@ -12,10 +12,23 @@ function getFullCalendarArgs()
     $gbfc_viewsDurationDays = get_option('gbfc_viewsDurationDays', []);
     // Header Toolbar
     $headerToolbar = new stdClass();
-    $headerToolbar->left = 'prevYear,prev,today,next,nextYear';
-    $headerToolbar->center = 'title';
+    //$headerToolbar->left = 'prevYear,prev,today,next,nextYear';
+    //$headerToolbar->center = 'title';
+    //$headerToolbar->right = implode(',', $gbfc_enabledViews);
+    $headerToolbar->left = 'title';
+    $headerToolbar->center = '';
     $headerToolbar->right = implode(',', $gbfc_enabledViews);
     $headerToolbar = apply_filters('gbfc_calendar_header_vars', $headerToolbar);
+
+    $titleFormat = new stdClass();
+    $titleFormat->year = 'numeric';
+    $titleFormat->month = 'long';
+    $titleFormat->day = 'numeric';
+
+    // Text that will be displayed on buttons
+    $buttonText = new stdClass();
+    $buttonText->timeGridCustom = 'Wochenansicht';
+    $buttonText->list = 'Liste';
 
     // Custom views
     $fcOptions = json_decode(file_get_contents(__DIR__ . "/../res/FcOptions.json"));
@@ -41,6 +54,7 @@ function getFullCalendarArgs()
         'initialView' => get_option('gbfc_initialView', 'dayGridMonth'), // Can be overwritten in shortcode
         'weekends' => get_option('gbfc_weekends', true) ? true : false,
         'headerToolbar' => $headerToolbar,
+        'titleFormat' => $titleFormat,
         'locale' => strtolower(str_replace('_', '-', get_locale())),
         'eventDisplay' => 'block', // See https://fullcalendar.io/docs/v5/eventDisplay
         // See https://fullcalendar.io/docs/v5/event-popover
@@ -49,6 +63,9 @@ function getFullCalendarArgs()
         'views' => $views,
         // TODO Can be removed, but causes much overhead, as whole month of start date is fetched from EM.
         'showNonCurrentDates' => false,
+        'allDaySlot' => false,
+        'buttonText' => $buttonText,
+        'navLinks' => true,
 
         // eventBackgroundColor: 'white',
         // eventColor: 'white',
