@@ -28,7 +28,7 @@ if (!is_plugin_active('wp-fullcalendar/wp-fullcalendar.php')) {
 }
 
 /**
- * Registers all block assets so that they can be enqueued through the block editor
+ * Registers block assets so that they can be enqueued through the block editor
  * in the corresponding context.
  *
  * @see https://developer.wordpress.org/block-editor/tutorials/block-tutorial/applying-styles-with-stylesheets/
@@ -37,19 +37,33 @@ function create_block_gb_fullcalendar_block_init()
 {
     $dir = dirname(__FILE__);
 
-    $script_asset_path = "$dir/build/index.asset.php";
-    if (!file_exists($script_asset_path)) {
+    // Admin dependencies are defined in index.asset.php
+    $admin_script_asset_path = "$dir/build/index.asset.php";
+    if (!file_exists($admin_script_asset_path)) {
         throw new Error(
             'You need to run `npm start` or `npm run build` for the "oberhauser-dev/gb-fullcalendar" block first.'
         );
     }
+
+    // Client dependencies are defined in client.asset.php
+    $client_script_asset_path = "$dir/build/client.asset.php";
+    if (!file_exists($client_script_asset_path)) {
+        throw new Error(
+            'You need to run `npm start` or `npm run build` for the client script in the "oberhauser-dev/gb-fullcalendar" block first.'
+        );
+    }
+
+    $admin_script_asset = require($admin_script_asset_path);
+    $client_script_asset = require($client_script_asset_path);
+
+    // Register admin (editor) scripts and styles; client dependencies are loaded in enqueue_assets_if_shortcode_present
+    if (is_admin()) {
     $index_js = 'build/index.js';
-    $script_asset = require($script_asset_path);
     wp_register_script(
         'gb-fullcalendar-block-editor',
         plugins_url($index_js, __FILE__),
-        $script_asset['dependencies'],
-        $script_asset['version']
+            $admin_script_asset['dependencies'],
+            $admin_script_asset['version']
     );
 
     $editor_css = 'build/index.css';
@@ -60,45 +74,22 @@ function create_block_gb_fullcalendar_block_init()
         filemtime("$dir/$editor_css")
     );
 
-    // Replaced by client.css
-    /*$style_css = 'build/style-index.css';
-    wp_register_style(
-        'gb-fullcalendar-block',
-        plugins_url($style_css, __FILE__),
-        array(),
-        filemtime("$dir/$style_css")
-    );*/
+        register_block_type('oberhauser-dev/gb-fullcalendar', array(
+            'editor_script' => 'gb-fullcalendar-block-editor',
+            'editor_style' => 'gb-fullcalendar-block-editor',
+        ));
 
-    // TODO may only load, if block is present, if possible.
-    $client_js = 'build/client.js';
-    wp_register_script(
-        'gb-fullcalendar-block-client',
-        plugins_url($client_js, __FILE__),
-        $script_asset['dependencies'],
-        $script_asset['version']
-    );
-
-    $client_css = 'build/client.css';
-    wp_register_style(
-        'gb-fullcalendar-block-client',
-        plugins_url($client_css, __FILE__),
-        array(),
-        filemtime("$dir/$client_css")
-    );
+        localize_script();
+        include_once('php/gb-fc-admin.php');
+    }
 
     register_block_type('oberhauser-dev/gb-fullcalendar', array(
-        'editor_script' => 'gb-fullcalendar-block-editor',
-        'editor_style' => 'gb-fullcalendar-block-editor',
         'script' => 'gb-fullcalendar-block-client',
         'style' => 'gb-fullcalendar-block-client',
     ));
 
-    if (is_admin()) {
-        // Call always as admin, otherwise block cannot be added dynamically.
-        localize_script();
-        include_once('php/gb-fc-admin.php');
-    } else {
-        // Add shortcode
+    // Add shortcode for frontend usage
+    if (!is_admin()) {
         add_shortcode('fullcalendar', 'calendar_via_shortcode');
     }
 
@@ -124,18 +115,46 @@ function create_block_gb_fullcalendar_block_init()
 add_action('init', 'create_block_gb_fullcalendar_block_init');
 
 /**
- * Only localize js variables if block is present in front-end.
+ * Only load client functionalities if shortcode is present in front-end.
  */
-function create_block_gbfc_block_enqueue_script()
-{
-    // Always enqueue script, as shortcode need localized script, too.
-    // TODO may fix that only load, when needed.
-//    if (has_block('oberhauser-dev/gb-fullcalendar')) {
-    localize_script();
-//    }
+function enqueue_assets_if_shortcode_present() {
+    global $post;
+
+    if (is_a($post, 'WP_Post') && has_shortcode($post->post_content, 'fullcalendar')) {
+        $dir = dirname(__FILE__);
+        $client_script_asset_path = "$dir/build/client.asset.php";
+        
+        if (!file_exists($client_script_asset_path)) {
+            throw new Error('Client asset file not found.');
+        }
+
+        $client_script_asset = require($client_script_asset_path);
+
+        // Register and enqueue client script
+        $client_js = 'build/client.js';
+        wp_enqueue_script(
+            'gb-fullcalendar-block-client',
+            plugins_url($client_js, __FILE__),
+            $client_script_asset['dependencies'],
+            $client_script_asset['version'],
+            true
+        );
+
+        // Register and enqueue client style
+        $client_css = 'build/client.css';
+        wp_enqueue_style(
+            'gb-fullcalendar-block-client',
+            plugins_url($client_css, __FILE__),
+            array(),
+            filemtime("$dir/$client_css")
+        );
+
+        // Localize javascript variables
+        localize_script();
+    }
 }
 
-add_action('wp_enqueue_scripts', 'create_block_gbfc_block_enqueue_script');
+add_action('wp_enqueue_scripts', 'enqueue_assets_if_shortcode_present');
 
 // action links (e.g. Settings)
 function gbfc_settings_link($links)
